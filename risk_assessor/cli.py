@@ -430,6 +430,191 @@ catalog_path: .risk_assessor/catalog.json
     console.print("You can use environment variables by keeping the ${VAR} syntax.")
 
 
+@cli.command()
+@click.option('--incident-date', required=True, help='When the incident occurred (ISO format: YYYY-MM-DDTHH:MM:SS)')
+@click.option('--severity', required=True, type=click.Choice(['critical', 'high', 'medium', 'low']), help='Incident severity')
+@click.option('--incident-type', required=True, help='Type of incident (e.g., outage, performance, security)')
+@click.option('--description', required=True, help='What happened')
+@click.option('--root-cause', required=True, help='What caused the incident')
+@click.option('--affected-files', required=True, multiple=True, help='Files involved (can specify multiple)')
+@click.option('--missed-indicator', multiple=True, help='What should have been caught')
+@click.option('--resolution', required=True, help='How it was fixed')
+@click.option('--lessons-learned', multiple=True, help='What to watch for next time')
+@click.option('--pr-number', type=int, help='PR number if applicable')
+@click.option('--commit-sha', help='Commit SHA if applicable')
+@click.option('--changeset-id', help='Assessment ID that missed this')
+@click.option('--original-risk-score', type=float, help='Original risk score given')
+@click.option('--original-risk-level', help='Original risk level given')
+@click.option('--time-to-resolve', type=float, help='Hours to resolve')
+@click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
+def record_incident(
+    incident_date, severity, incident_type, description, root_cause,
+    affected_files, missed_indicator, resolution, lessons_learned,
+    pr_number, commit_sha, changeset_id, original_risk_score,
+    original_risk_level, time_to_resolve, config
+):
+    """Record feedback about an incident that occurred."""
+    try:
+        # Load configuration
+        cfg = Config.from_file(config) if config else Config.from_env()
+        
+        # Initialize engine
+        engine = RiskEngine(cfg)
+        
+        # Record feedback
+        entry = engine.record_incident_feedback(
+            incident_date=incident_date,
+            severity=severity,
+            incident_type=incident_type,
+            description=description,
+            root_cause=root_cause,
+            affected_files=list(affected_files),
+            missed_indicators=list(missed_indicator),
+            resolution=resolution,
+            lessons_learned=list(lessons_learned),
+            pr_number=pr_number,
+            commit_sha=commit_sha,
+            changeset_id=changeset_id,
+            original_risk_score=original_risk_score,
+            original_risk_level=original_risk_level,
+            time_to_resolve_hours=time_to_resolve
+        )
+        
+        console.print(Panel(
+            f"[bold green]Incident Feedback Recorded[/bold green]\n\n"
+            f"ID: {entry.id}\n"
+            f"Severity: {entry.severity}\n"
+            f"Type: {entry.incident_type}\n"
+            f"Affected Files: {len(entry.affected_files)}",
+            title="✓ Feedback Saved",
+            border_style="green"
+        ))
+        
+        console.print("\n[dim]This feedback will be used to improve future risk assessments.[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error recording feedback: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command()
+@click.option('--severity', type=click.Choice(['critical', 'high', 'medium', 'low']), help='Filter by severity')
+@click.option('--incident-type', help='Filter by incident type')
+@click.option('--recent-days', type=int, default=90, help='Show incidents from last N days')
+@click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
+def view_feedback(severity, incident_type, recent_days, config):
+    """View recorded incident feedback."""
+    try:
+        # Load configuration
+        cfg = Config.from_file(config) if config else Config.from_env()
+        
+        # Initialize engine
+        engine = RiskEngine(cfg)
+        
+        # Get feedback
+        if severity:
+            entries = engine.feedback.search_by_severity(severity)
+        elif incident_type:
+            entries = engine.feedback.search_by_incident_type(incident_type)
+        else:
+            entries = engine.feedback.get_recent_feedback(days=recent_days)
+        
+        if not entries:
+            console.print("[yellow]No feedback entries found.[/yellow]")
+            return
+        
+        # Display in table
+        table = Table(title=f"Incident Feedback ({len(entries)} entries)")
+        table.add_column("ID", style="cyan")
+        table.add_column("Date", style="white")
+        table.add_column("Severity", style="red")
+        table.add_column("Type", style="yellow")
+        table.add_column("Files", style="green")
+        table.add_column("Description", style="white")
+        
+        for entry in entries[:20]:  # Show first 20
+            table.add_row(
+                entry.id[:12],
+                entry.incident_date[:10],
+                entry.severity,
+                entry.incident_type,
+                str(len(entry.affected_files)),
+                entry.description[:50] + "..." if len(entry.description) > 50 else entry.description
+            )
+        
+        console.print(table)
+        
+        if len(entries) > 20:
+            console.print(f"\n[dim]Showing 20 of {len(entries)} entries[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error viewing feedback: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command()
+@click.option('--config', '-c', type=click.Path(exists=True), help='Configuration file path')
+def feedback_stats(config):
+    """Show statistics about recorded feedback."""
+    try:
+        # Load configuration
+        cfg = Config.from_file(config) if config else Config.from_env()
+        
+        # Initialize engine
+        engine = RiskEngine(cfg)
+        
+        # Get statistics
+        stats = engine.get_feedback_statistics()
+        
+        if stats['total_entries'] == 0:
+            console.print("[yellow]No feedback entries recorded yet.[/yellow]")
+            console.print("\nUse 'risk-assessor record-incident' to record incidents.")
+            return
+        
+        console.print(Panel(
+            f"[bold]Total Incidents:[/bold] {stats['total_entries']}\n"
+            f"[bold]Average Resolution Time:[/bold] {stats['average_resolution_hours']:.1f} hours" 
+            if stats['average_resolution_hours'] else "[bold]Total Incidents:[/bold] {stats['total_entries']}",
+            title="Feedback Statistics",
+            border_style="blue"
+        ))
+        
+        # Severity breakdown
+        if stats['by_severity']:
+            console.print("\n[bold]By Severity:[/bold]")
+            severity_table = Table()
+            severity_table.add_column("Severity", style="cyan")
+            severity_table.add_column("Count", style="white")
+            
+            for severity, count in sorted(stats['by_severity'].items()):
+                severity_table.add_row(severity.capitalize(), str(count))
+            
+            console.print(severity_table)
+        
+        # Incident type breakdown
+        if stats['by_incident_type']:
+            console.print("\n[bold]By Incident Type:[/bold]")
+            type_table = Table()
+            type_table.add_column("Type", style="cyan")
+            type_table.add_column("Count", style="white")
+            
+            for inc_type, count in sorted(stats['by_incident_type'].items()):
+                type_table.add_row(inc_type.capitalize(), str(count))
+            
+            console.print(type_table)
+        
+    except Exception as e:
+        console.print(f"[red]Error getting feedback statistics: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+
 def main():
     """Main entry point."""
     cli()

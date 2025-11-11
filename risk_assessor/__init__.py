@@ -4,6 +4,7 @@ __version__ = "0.1.0"
 
 from risk_assessor.core.risk_engine import RiskEngine
 from risk_assessor.core.issue_catalog import IssueCatalog
+from risk_assessor.core.feedback import FeedbackCatalog, FeedbackEntry
 from risk_assessor.core.contracts import (
     RiskContract,
     RiskSummary,
@@ -14,7 +15,9 @@ from risk_assessor.core.contracts import (
 
 __all__ = [
     "RiskEngine", 
-    "IssueCatalog", 
+    "IssueCatalog",
+    "FeedbackCatalog",
+    "FeedbackEntry",
     "RiskContract",
     "RiskSummary",
     "RiskFactor",
