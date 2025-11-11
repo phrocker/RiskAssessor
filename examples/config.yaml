@@ -61,5 +61,25 @@ thresholds:
   history_weight: 0.3      # Weight for historical issue analysis
   llm_weight: 0.4          # Weight for LLM-based analysis
 
+# Regional Configuration (optional)
+# Configure cloud-agnostic regional validation
+regional:
+  # Cloud provider: aws, azure, gcp, custom, or bare_metal
+  cloud_provider: aws
+  
+  # Region-specific configurations
+  regions:
+    us-east-1:
+      # List of available features/services in this region
+      features: [ec2, rds, s3, lambda, dynamodb, eks, ecs, elasticache, kinesis, sqs, sns]
+      region_type: standard
+      availability_zones: 3
+    
+    us-gov-west-1:
+      # GovCloud regions typically have limited service availability
+      features: [ec2, rds, s3]
+      region_type: govcloud
+      availability_zones: 2
+
 # Path to store the issue catalog
 catalog_path: .risk_assessor/catalog.json

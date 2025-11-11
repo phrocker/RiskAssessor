@@ -77,6 +77,14 @@ class RiskThresholds:
 
 
 @dataclass
+class RegionalConfig:
+    """Regional configuration for cloud-agnostic deployments."""
+    
+    cloud_provider: Optional[str] = None
+    regions: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class Config:
     """Main configuration for RiskAssessor."""
     
@@ -84,6 +92,7 @@ class Config:
     jira: JiraConfig = field(default_factory=JiraConfig)
     llm: LLMConfig = field(default_factory=LLMConfig)
     thresholds: RiskThresholds = field(default_factory=RiskThresholds)
+    regional: RegionalConfig = field(default_factory=RegionalConfig)
     catalog_path: str = ".risk_assessor/catalog.json"
     
     @classmethod
@@ -154,11 +163,19 @@ class Config:
         if "catalog_path" in data:
             config.catalog_path = data["catalog_path"]
         
+        # Load regional config
+        if "regional" in data:
+            reg = data["regional"]
+            config.regional = RegionalConfig(
+                cloud_provider=reg.get("cloud_provider"),
+                regions=reg.get("regions", {})
+            )
+        
         return config
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary."""
-        return {
+        result = {
             "github": {
                 "repo": self.github.repo
             },
@@ -182,3 +199,11 @@ class Config:
             },
             "catalog_path": self.catalog_path
         }
+        
+        if self.regional.cloud_provider or self.regional.regions:
+            result["regional"] = {
+                "cloud_provider": self.regional.cloud_provider,
+                "regions": self.regional.regions
+            }
+        
+        return result

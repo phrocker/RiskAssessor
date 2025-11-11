@@ -11,6 +11,7 @@ from risk_assessor.core.contracts import (
 )
 from risk_assessor.analyzers.complexity import ComplexityAnalyzer
 from risk_assessor.analyzers.llm_analyzer import LLMAnalyzer
+from risk_assessor.analyzers.regional_validator import get_regional_validator, RegionalValidator
 from risk_assessor.integrations.github_client import GitHubClient, GitHubIssue, GitHubPullRequest
 from risk_assessor.integrations.jira_client import JiraClient, JiraIssue
 from risk_assessor.utils.config import Config
@@ -55,6 +56,14 @@ class RiskEngine:
                 server=config.jira.server,
                 username=config.jira.username,
                 token=config.jira.token
+            )
+        
+        # Initialize regional validator if configured
+        self.regional_validator = None
+        if config.regional.cloud_provider:
+            self.regional_validator = get_regional_validator(
+                config.regional.cloud_provider,
+                config.regional.regions
             )
     
     def sync_github_issues(self, state: str = "all", labels: Optional[List[str]] = None):
@@ -570,7 +579,8 @@ class RiskEngine:
             complexity_analysis=complexity_analysis,
             history_score=history_score,
             related_issues=related_issues,
-            llm_score=llm_score
+            llm_score=llm_score,
+            deployment_region=deployment_region
         )
         
         # Generate recommendations
@@ -630,7 +640,8 @@ class RiskEngine:
         complexity_analysis: Dict[str, Any],
         history_score: float,
         related_issues: List[CatalogedIssue],
-        llm_score: float
+        llm_score: float,
+        deployment_region: str = "unknown"
     ) -> List[RiskFactor]:
         """Generate risk factors from analysis results."""
         factors = []
@@ -659,6 +670,22 @@ class RiskEngine:
                 observed_value=f"{len(critical_files)} critical files affected",
                 assessment=f"Modified files include: {', '.join(critical_files[:3])}"
             ))
+        
+        # Regional availability factor (if regional validator configured)
+        if self.regional_validator and deployment_region != "unknown":
+            regional_info = self.regional_validator.validate_region(deployment_region)
+            missing_features = regional_info.get_missing_features()
+            
+            if missing_features:
+                # Regional risk factor
+                regional_weight = 0.15  # Allocate fixed weight for regional risk
+                factors.append(RiskFactor(
+                    category="operational",
+                    factor_name="Regional Feature Availability",
+                    impact_weight=round(regional_weight, 2),
+                    observed_value=f"{len(missing_features)} features unavailable in {deployment_region}",
+                    assessment=f"Missing features: {', '.join([f.name for f in missing_features[:3]])}"
+                ))
         
         # Historical/operational factor
         if related_issues:
