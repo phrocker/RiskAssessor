@@ -8,6 +8,7 @@ A Python-based tool for assessing deployment risk by analyzing code changes, his
 - 📊 **Complexity Analysis**: Analyze code changes for complexity metrics
 - 🤖 **LLM-Powered Risk Assessment**: Use AI to evaluate deployment risks
 - 📚 **Historical Analysis**: Learn from past issues to predict future risks
+- 🔄 **Incident Feedback Loop**: Record and learn from actual incidents to improve future assessments (NEW!)
 - 📈 **Comprehensive Metrics**: Track additions, deletions, file types, and critical files
 - 🎯 **Risk Scoring**: Get actionable risk scores and recommendations
 - 📋 **Risk Contracts**: Structured JSON contracts for standardized risk reporting (v2.0)
@@ -28,6 +29,18 @@ RiskAssessor now supports **Risk Contracts** - a structured JSON format that pro
 - **CI/CD Integration**: Easy to parse and integrate into automated pipelines
 
 See the [examples/README.md](examples/README.md) for detailed documentation and usage examples.
+
+### Incident Feedback Mechanism (NEW!)
+
+Learn from actual incidents with the new feedback mechanism:
+
+- **Record Incidents**: Document what went wrong, what was missed, and lessons learned
+- **Automatic Learning**: Future assessments automatically incorporate incident history
+- **Weighted Risk Scoring**: Actual incidents are weighted more heavily (60%) than traditional issue tracking (40%)
+- **CLI Integration**: Simple commands to record and view incident feedback
+- **Feedback-Based Risk Factors**: Incidents appear as dedicated factors in risk contracts
+
+See [FEEDBACK.md](FEEDBACK.md) for detailed documentation on using the feedback mechanism.
 
 #### New Risk Level Thresholds
 
@@ -281,6 +294,49 @@ View statistics about the issue catalog:
 
 ```bash
 risk-assessor catalog-stats
+```
+
+#### `record-incident` (NEW!)
+
+Record feedback about an incident that occurred:
+
+```bash
+risk-assessor record-incident \
+  --incident-date "2025-11-10T15:30:00Z" \
+  --severity critical \
+  --incident-type outage \
+  --description "Production API service went down" \
+  --root-cause "Memory leak in connection pooling code" \
+  --affected-files "src/api/server.py" \
+  --affected-files "src/database/pool.py" \
+  --missed-indicator "No memory profiling in CI" \
+  --resolution "Added connection timeout and fixed memory leak" \
+  --lessons-learned "Always profile memory usage" \
+  --pr-number 123 \
+  --time-to-resolve 2.5
+```
+
+#### `view-feedback` (NEW!)
+
+View recorded incident feedback:
+
+```bash
+# View recent feedback (last 90 days)
+risk-assessor view-feedback
+
+# Filter by severity
+risk-assessor view-feedback --severity critical
+
+# Filter by incident type
+risk-assessor view-feedback --incident-type outage
+```
+
+#### `feedback-stats` (NEW!)
+
+Show statistics about recorded feedback:
+
+```bash
+risk-assessor feedback-stats
 ```
 
 ## Risk Contract Format (v2.0)

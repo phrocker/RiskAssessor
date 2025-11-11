@@ -1,0 +1,60 @@
+[
+  {
+    "id": "feedback-35f2b9be26f7",
+    "timestamp": "2025-11-11T17:36:12.511261",
+    "incident_date": "2025-11-06T17:36:12.511224",
+    "changeset_id": null,
+    "pr_number": 456,
+    "commit_sha": "abc123def",
+    "severity": "critical",
+    "incident_type": "outage",
+    "description": "Production database connection pool exhausted, causing complete service outage",
+    "root_cause": "Connection leak due to missing finally block in database wrapper",
+    "affected_files": [
+      "src/database/connection.py",
+      "src/database/pool.py"
+    ],
+    "missed_indicators": [
+      "No connection pool monitoring in place",
+      "Missing connection timeout configuration",
+      "No automated connection leak detection"
+    ],
+    "original_risk_score": 0.35,
+    "original_risk_level": "medium",
+    "resolution": "Added finally blocks to ensure connections are released, added connection pool monitoring",
+    "time_to_resolve_hours": 3.5,
+    "lessons_learned": [
+      "Always use context managers or try/finally for resource management",
+      "Monitor connection pool metrics in production",
+      "Add connection pool exhaustion alerts"
+    ]
+  },
+  {
+    "id": "feedback-98c7a0cae586",
+    "timestamp": "2025-11-11T17:36:12.511612",
+    "incident_date": "2025-10-27T17:36:12.511588",
+    "changeset_id": null,
+    "pr_number": 423,
+    "commit_sha": null,
+    "severity": "high",
+    "incident_type": "performance",
+    "description": "API response times degraded to 5+ seconds under load",
+    "root_cause": "N+1 query problem in user search endpoint",
+    "affected_files": [
+      "src/api/search.py",
+      "src/database/queries.py"
+    ],
+    "missed_indicators": [
+      "No performance testing in CI",
+      "Query count not monitored during code review"
+    ],
+    "original_risk_score": 0.42,
+    "original_risk_level": "medium",
+    "resolution": "Optimized query to use joins instead of sequential queries",
+    "time_to_resolve_hours": 6.0,
+    "lessons_learned": [
+      "Add query count assertions to tests",
+      "Require performance testing for database-heavy endpoints"
+    ]
+  }
+]
