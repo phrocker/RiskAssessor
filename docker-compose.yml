@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  risk-assessor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: risk-assessor:latest
+    container_name: risk-assessor
+    environment:
+      # GitHub configuration
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_REPO=${GITHUB_REPO}
+      
+      # Jira configuration (optional)
+      - JIRA_SERVER=${JIRA_SERVER:-}
+      - JIRA_USERNAME=${JIRA_USERNAME:-}
+      - JIRA_TOKEN=${JIRA_TOKEN:-}
+      - JIRA_PROJECT=${JIRA_PROJECT:-}
+      
+      # LLM configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4}
+      - LLM_API_BASE=${LLM_API_BASE:-}
+      
+      # Catalog path
+      - RISK_CATALOG_PATH=/app/.risk_assessor/catalog.json
+    volumes:
+      # Persist catalog data
+      - risk-assessor-data:/app/.risk_assessor
+      # Mount local git repo if needed
+      - ${LOCAL_REPO_PATH:-.}:/repo:ro
+    working_dir: /app
+    command: ["risk-assessor", "--help"]
+    restart: unless-stopped
+
+volumes:
+  risk-assessor-data:
+    driver: local

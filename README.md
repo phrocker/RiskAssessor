@@ -11,6 +11,8 @@ A Python-based tool for assessing deployment risk by analyzing code changes, his
 - 📈 **Comprehensive Metrics**: Track additions, deletions, file types, and critical files
 - 🎯 **Risk Scoring**: Get actionable risk scores and recommendations
 - 💻 **CLI Interface**: Easy-to-use command-line interface
+- ☁️ **Cloud-Agnostic Deployment**: Deploy to Kubernetes, AWS Lambda, Google Cloud Functions, or Azure Functions
+- 🐳 **Docker Support**: Containerized for consistent environments
 
 ## Installation
 
@@ -26,6 +28,24 @@ pip install -e .
 
 ```bash
 pip install risk-assessor
+```
+
+### Using Docker
+
+```bash
+# Pull the image (once published)
+docker pull ghcr.io/phrocker/risk-assessor:latest
+
+# Or build locally
+docker build -t risk-assessor:latest .
+
+# Run
+docker run --rm \
+  -e GITHUB_TOKEN="your-token" \
+  -e GITHUB_REPO="owner/repo" \
+  -e OPENAI_API_KEY="your-key" \
+  risk-assessor:latest \
+  risk-assessor assess-pr --pr 123
 ```
 
 ## Quick Start
@@ -315,6 +335,47 @@ risk-assessor assess-commits --base v1.0.0 --head v1.1.0 --output release-risk.j
 # Review the report
 cat release-risk.json | jq '.llm_analysis.recommendations'
 ```
+
+## Deployment
+
+RiskAssessor supports multiple deployment options for cloud-agnostic infrastructure:
+
+### Docker
+
+```bash
+# Using Docker Compose
+docker-compose up -d
+docker-compose run risk-assessor risk-assessor assess-pr --pr 123
+```
+
+### Kubernetes
+
+```bash
+# Deploy to any Kubernetes cluster (GKE, EKS, AKS, on-prem)
+kubectl apply -f deployments/kubernetes/
+```
+
+### Serverless
+
+**AWS Lambda:**
+```bash
+cd deployments/serverless/aws-lambda
+serverless deploy
+```
+
+**Google Cloud Functions:**
+```bash
+cd deployments/serverless/google-cloud-functions
+gcloud functions deploy risk-assessor --runtime python311 --trigger-http
+```
+
+**Azure Functions:**
+```bash
+cd deployments/serverless/azure-functions
+func azure functionapp publish risk-assessor-func
+```
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Development
 

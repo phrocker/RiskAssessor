@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: risk-assessor-sync
+  namespace: risk-assessor
+  labels:
+    app: risk-assessor
+    component: sync
+spec:
+  # Run every day at 2 AM
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: risk-assessor
+            component: sync
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: sync
+            image: risk-assessor:latest
+            imagePullPolicy: IfNotPresent
+            
+            command:
+            - risk-assessor
+            - sync
+            - --source
+            - github
+            - --state
+            - all
+            
+            envFrom:
+            - configMapRef:
+                name: risk-assessor-config
+            - secretRef:
+                name: risk-assessor-secrets
+            
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "500m"
+            
+            volumeMounts:
+            - name: catalog-data
+              mountPath: /app/.risk_assessor
+            
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              readOnlyRootFilesystem: false
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+          
+          volumes:
+          - name: catalog-data
+            persistentVolumeClaim:
+              claimName: risk-assessor-data

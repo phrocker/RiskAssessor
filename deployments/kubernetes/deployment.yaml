@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-assessor
+  namespace: risk-assessor
+  labels:
+    app: risk-assessor
+    version: v0.1.0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: risk-assessor
+  template:
+    metadata:
+      labels:
+        app: risk-assessor
+        version: v0.1.0
+    spec:
+      containers:
+      - name: risk-assessor
+        image: risk-assessor:latest
+        imagePullPolicy: IfNotPresent
+        
+        # Environment variables from ConfigMap
+        envFrom:
+        - configMapRef:
+            name: risk-assessor-config
+        - secretRef:
+            name: risk-assessor-secrets
+        
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Volume mounts
+        volumeMounts:
+        - name: catalog-data
+          mountPath: /app/.risk_assessor
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        
+        # Liveness and readiness probes
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import risk_assessor; print('OK')"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import risk_assessor; print('OK')"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      
+      # Volumes
+      volumes:
+      - name: catalog-data
+        persistentVolumeClaim:
+          claimName: risk-assessor-data
+      - name: config-volume
+        configMap:
+          name: risk-assessor-config
+          items:
+          - key: risk_assessor_config.yaml
+            path: risk_assessor_config.yaml
+      
+      # Service account (optional)
+      # serviceAccountName: risk-assessor
+      
+      # Node selector (optional)
+      # nodeSelector:
+      #   workload: standard
+      
+      # Tolerations (optional)
+      # tolerations:
+      # - key: "workload"
+      #   operator: "Equal"
+      #   value: "standard"
+      #   effect: "NoSchedule"

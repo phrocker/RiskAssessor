@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: risk-assessor-config
+  namespace: risk-assessor
+  labels:
+    app: risk-assessor
+data:
+  # GitHub configuration
+  GITHUB_REPO: "owner/repository"
+  
+  # Jira configuration (optional)
+  JIRA_SERVER: "https://your-company.atlassian.net"
+  JIRA_PROJECT: "PROJECT_KEY"
+  
+  # LLM configuration
+  LLM_MODEL: "gpt-4"
+  
+  # Catalog path
+  RISK_CATALOG_PATH: "/app/.risk_assessor/catalog.json"
+  
+  # Thresholds (optional overrides)
+  THRESHOLDS_LOW: "0.3"
+  THRESHOLDS_MEDIUM: "0.6"
+  THRESHOLDS_HIGH: "0.8"
+  
+  # Risk assessment config
+  risk_assessor_config.yaml: |
+    github:
+      token: ${GITHUB_TOKEN}
+      repo: ${GITHUB_REPO}
+    
+    jira:
+      server: ${JIRA_SERVER}
+      username: ${JIRA_USERNAME}
+      token: ${JIRA_TOKEN}
+      project: ${JIRA_PROJECT}
+    
+    llm:
+      api_key: ${OPENAI_API_KEY}
+      model: ${LLM_MODEL}
+      temperature: 0.7
+    
+    thresholds:
+      low: 0.3
+      medium: 0.6
+      high: 0.8
+      complexity_weight: 0.3
+      history_weight: 0.3
+      llm_weight: 0.4
+    
+    catalog_path: ${RISK_CATALOG_PATH}
