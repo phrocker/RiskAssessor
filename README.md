@@ -10,7 +10,28 @@ A Python-based tool for assessing deployment risk by analyzing code changes, his
 - 📚 **Historical Analysis**: Learn from past issues to predict future risks
 - 📈 **Comprehensive Metrics**: Track additions, deletions, file types, and critical files
 - 🎯 **Risk Scoring**: Get actionable risk scores and recommendations
+- 📋 **Risk Contracts**: Structured JSON contracts for standardized risk reporting (v2.0)
 - 💻 **CLI Interface**: Easy-to-use command-line interface
+
+## What's New in v2.0
+
+### Risk Contracts
+
+RiskAssessor now supports **Risk Contracts** - a structured JSON format that provides comprehensive risk analysis with:
+
+- **Standardized Output**: Consistent format for all risk assessments
+- **Factor Breakdown**: Detailed categorization of risk factors (code, configuration, operational, testing, ownership)
+- **Actionable Recommendations**: Clear next steps based on analysis
+- **Historical Context**: Information about past incidents and similar changes
+- **CI/CD Integration**: Easy to parse and integrate into automated pipelines
+
+See the [examples/README.md](examples/README.md) for detailed documentation and usage examples.
+
+#### New Risk Level Thresholds
+
+- **LOW**: Risk score < 0.33 (safe for standard deployment)
+- **MEDIUM**: Risk score 0.33 - 0.66 (requires careful review)  
+- **HIGH**: Risk score > 0.66 (needs staged rollout)
 
 ## Installation
 
@@ -82,7 +103,23 @@ risk-assessor sync --source jira --project PROJECT_KEY
 
 ### 3. Assess Risk
 
-Assess a pull request:
+#### Using Risk Contracts (Recommended - v2.0)
+
+Assess a pull request with structured contract output:
+
+```bash
+risk-assessor assess-pr-contract --pr 123 --deployment-region us-east-1 --output risk.json
+```
+
+Assess commits between branches with contract output:
+
+```bash
+risk-assessor assess-commits-contract --base main --head feature-branch --deployment-region us-east-1 --output risk.json
+```
+
+#### Legacy Format
+
+Assess a pull request (legacy format):
 
 ```bash
 risk-assessor assess-pr --pr 123
@@ -164,6 +201,60 @@ risk-assessor assess-commits --base v1.0.0 --head v2.0.0
 risk-assessor assess-commits --base main --head develop --output assessment.json
 ```
 
+#### `assess-pr-contract` (NEW in v2.0)
+
+Assess a pull request with contract format:
+
+```bash
+# Basic assessment with contract
+risk-assessor assess-pr-contract --pr 123 --deployment-region us-east-1
+
+# Save contract to JSON file
+risk-assessor assess-pr-contract --pr 123 --deployment-region us-east-1 --output risk.json
+```
+
+#### `assess-commits-contract` (NEW in v2.0)
+
+Assess commits with contract format:
+
+```bash
+# Assess between branches
+risk-assessor assess-commits-contract --base main --head develop --deployment-region us-west-2
+
+# Save to JSON
+risk-assessor assess-commits-contract --base main --head develop --deployment-region us-west-2 --output risk.json
+```
+
+#### `assess-pr` (Legacy)
+
+Assess a pull request with legacy format:
+
+```bash
+# Basic assessment
+risk-assessor assess-pr --pr 123
+
+# Save to JSON file
+risk-assessor assess-pr --pr 123 --output risk-report.json
+
+# Use custom config
+risk-assessor assess-pr --pr 123 --config my-config.yaml
+```
+
+#### `assess-commits` (Legacy)
+
+Assess risk for commits between two references:
+
+```bash
+# Assess between branches
+risk-assessor assess-commits --base main --head develop
+
+# Assess between tags
+risk-assessor assess-commits --base v1.0.0 --head v2.0.0
+
+# Save to JSON
+risk-assessor assess-commits --base main --head develop --output assessment.json
+```
+
 #### `catalog-stats`
 
 View statistics about the issue catalog:
@@ -171,6 +262,43 @@ View statistics about the issue catalog:
 ```bash
 risk-assessor catalog-stats
 ```
+
+## Risk Contract Format (v2.0)
+
+### Contract Structure
+
+Risk contracts provide a standardized format for risk assessments:
+
+```json
+{
+  "id": "changeset-abc123",
+  "timestamp": "2025-11-11T14:32:00Z",
+  "repository": "sentrius-core",
+  "branch": "feature/abac-risk-eval",
+  "deployment_region": "us-east-1",
+  "risk_summary": {
+    "risk_score": 0.78,
+    "risk_level": "HIGH",
+    "confidence": 0.87,
+    "overall_assessment": "High risk of outage..."
+  },
+  "factors": [...],
+  "recommendations": [...],
+  "historical_context": {...},
+  "model_details": {...},
+  "text_summary": "Risk Assessor v2 detected..."
+}
+```
+
+See [examples/example_risk_contract.json](examples/example_risk_contract.json) for a complete example.
+
+### Risk Factor Categories
+
+- **configuration**: Config files, environment variables, deployment settings
+- **code**: Change volume, complexity, file types
+- **operational**: Region stability, deployment history
+- **testing**: Test coverage, quality metrics
+- **ownership**: Code churn, contributor patterns
 
 ## How It Works
 
@@ -199,9 +327,17 @@ RiskAssessor uses a multi-factor approach to assess deployment risk:
 - Identifies key concerns
 - Offers confidence ratings
 
-### Risk Scores
+### Risk Scores and Levels (v2.0)
 
-The tool provides risk scores from 0.0 to 1.0:
+The tool provides risk scores from 0.0 to 1.0 with updated thresholds:
+
+- **LOW** (< 0.33): Safe to deploy with standard procedures
+- **MEDIUM** (0.33 - 0.66): Review carefully, consider additional testing
+- **HIGH** (> 0.66): Requires thorough review and staged rollout
+
+### Legacy Risk Levels
+
+The legacy format uses these thresholds:
 
 - **Low Risk** (< 0.3): Safe to deploy with standard procedures
 - **Medium Risk** (0.3 - 0.6): Review carefully, consider additional testing
@@ -254,7 +390,55 @@ thresholds:
 
 ## Python API
 
-Use RiskAssessor programmatically:
+### Using Risk Contracts (v2.0)
+
+```python
+from risk_assessor import RiskEngine
+from risk_assessor.utils.config import Config
+import json
+
+# Load configuration
+config = Config.from_env()
+
+# Initialize engine
+engine = RiskEngine(config)
+
+# Sync issues (optional)
+engine.sync_github_issues(state="all")
+
+# Assess a PR with contract format
+contract = engine.assess_pull_request_contract(
+    pr_number=123,
+    deployment_region="us-east-1",
+    branch="main"
+)
+
+# Access contract data
+print(f"Risk Level: {contract.risk_summary.risk_level}")
+print(f"Risk Score: {contract.risk_summary.risk_score:.2f}")
+print(f"Confidence: {contract.risk_summary.confidence:.2f}")
+
+# Access factors
+for factor in contract.factors:
+    print(f"  {factor.factor_name}: {factor.observed_value}")
+
+# Access recommendations
+for rec in contract.recommendations:
+    print(f"  - {rec}")
+
+# Export to JSON
+with open('risk_contract.json', 'w') as f:
+    json.dump(contract.to_dict(), f, indent=2)
+
+# Load from JSON
+from risk_assessor.core.contracts import RiskContract
+with open('risk_contract.json') as f:
+    loaded_contract = RiskContract.from_dict(json.load(f))
+```
+
+### Legacy Format
+
+Use RiskAssessor with the legacy format:
 
 ```python
 from risk_assessor import RiskEngine
@@ -306,7 +490,29 @@ Add to your GitHub Actions workflow:
 
 ### Pre-deployment Check
 
-Before deploying a release:
+Before deploying a release with contract format:
+
+```bash
+# Assess changes in the release with contract
+risk-assessor assess-commits-contract \
+  --base v1.0.0 \
+  --head v1.1.0 \
+  --deployment-region production \
+  --output release-risk.json
+
+# Review the contract
+cat release-risk.json | jq '.risk_summary'
+cat release-risk.json | jq '.recommendations'
+
+# Check risk level and fail if HIGH
+RISK_LEVEL=$(jq -r '.risk_summary.risk_level' release-risk.json)
+if [ "$RISK_LEVEL" = "HIGH" ]; then
+  echo "High risk deployment detected - manual review required"
+  exit 1
+fi
+```
+
+Legacy format:
 
 ```bash
 # Assess changes in the release

@@ -1,0 +1,69 @@
+{
+  "id": "changeset-abc123",
+  "timestamp": "2025-11-11T14:32:00Z",
+  "repository": "sentrius-core",
+  "branch": "feature/abac-risk-eval",
+  "deployment_region": "us-east-1",
+  "risk_summary": {
+    "risk_score": 0.78,
+    "risk_level": "HIGH",
+    "confidence": 0.87,
+    "overall_assessment": "High risk of outage due to multiple concurrent config and dependency changes."
+  },
+  "factors": [
+    {
+      "category": "configuration",
+      "factor_name": "Config Drift",
+      "impact_weight": 0.3,
+      "observed_value": "12 new environment variables introduced",
+      "assessment": "Large config drift compared to baseline in us-east-1"
+    },
+    {
+      "category": "code",
+      "factor_name": "Change Volume",
+      "impact_weight": 0.25,
+      "observed_value": "1,200 lines changed across 18 files",
+      "assessment": "Above 95th percentile of normal changes for this repo"
+    },
+    {
+      "category": "operational",
+      "factor_name": "Region Stability",
+      "impact_weight": 0.2,
+      "observed_value": "Previous rollback within 24 hours",
+      "assessment": "Recent rollback detected for same region and service"
+    },
+    {
+      "category": "testing",
+      "factor_name": "Test Coverage Delta",
+      "impact_weight": 0.1,
+      "observed_value": "-6% coverage drop",
+      "assessment": "Lower test coverage compared to baseline"
+    },
+    {
+      "category": "ownership",
+      "factor_name": "Code Churn",
+      "impact_weight": 0.15,
+      "observed_value": "7 different committers in last 10 commits",
+      "assessment": "High churn area; may indicate unclear ownership"
+    }
+  ],
+  "recommendations": [
+    "Perform a canary deployment in us-east-1 before global rollout.",
+    "Enable feature flag rollback hooks.",
+    "Run extended smoke tests on configuration initialization paths.",
+    "Ensure config validation tests include new environment variables."
+  ],
+  "historical_context": {
+    "previous_similar_changes": 14,
+    "previous_incidents_in_region": 3,
+    "last_incident_cause": "Config misalignment in env vars",
+    "time_since_last_outage_days": 7
+  },
+  "model_details": {
+    "model_version": "2.0.0",
+    "model_type": "hybrid_rule_ml",
+    "trained_on_releases": 1542,
+    "last_updated": "2025-11-01"
+  },
+  "text_summary": "Risk Assessor v2 detected a HIGH likelihood (78%) that this deployment could cause service instability in us-east-1. The primary drivers are significant configuration drift, large code volume, and recent rollback activity in the same region. Canary rollout and configuration validation are strongly recommended."
+}
