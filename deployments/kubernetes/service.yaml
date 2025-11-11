@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-assessor
+  namespace: risk-assessor
+  labels:
+    app: risk-assessor
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: risk-assessor

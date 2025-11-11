@@ -1,0 +1,140 @@
+service: risk-assessor
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 512
+  timeout: 300
+  
+  # Environment variables
+  environment:
+    GITHUB_TOKEN: ${env:GITHUB_TOKEN}
+    GITHUB_REPO: ${env:GITHUB_REPO}
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY}
+    LLM_MODEL: ${env:LLM_MODEL, 'gpt-4'}
+    RISK_CATALOG_PATH: /tmp/.risk_assessor/catalog.json
+    JIRA_SERVER: ${env:JIRA_SERVER, ''}
+    JIRA_USERNAME: ${env:JIRA_USERNAME, ''}
+    JIRA_TOKEN: ${env:JIRA_TOKEN, ''}
+    JIRA_PROJECT: ${env:JIRA_PROJECT, ''}
+  
+  # IAM role permissions
+  iam:
+    role:
+      statements:
+        # Allow S3 access for catalog storage
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+            - s3:PutObject
+          Resource: "arn:aws:s3:::${self:custom.catalogBucket}/*"
+        
+        # CloudWatch Logs
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: "arn:aws:logs:*:*:*"
+
+custom:
+  catalogBucket: risk-assessor-catalog-${self:provider.stage}
+  pythonRequirements:
+    dockerizePip: true
+    layer: true
+
+plugins:
+  - serverless-python-requirements
+
+functions:
+  # Main assessment function
+  assessor:
+    handler: handler.lambda_handler
+    description: RiskAssessor main handler
+    events:
+      # API Gateway endpoints
+      - http:
+          path: assess
+          method: post
+          cors: true
+      
+      # EventBridge scheduled sync (daily at 2 AM UTC)
+      - schedule:
+          name: daily-sync-github
+          description: Daily sync of GitHub issues
+          rate: cron(0 2 * * ? *)
+          enabled: true
+          input:
+            operation: sync-github
+            params:
+              state: all
+    
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+  # Dedicated function for PR assessment (optimized for API Gateway)
+  assessPR:
+    handler: handler.lambda_handler
+    description: Assess a GitHub pull request
+    events:
+      - http:
+          path: assess/pr/{pr}
+          method: get
+          cors: true
+          request:
+            parameters:
+              paths:
+                pr: true
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+  # Dedicated function for commit assessment
+  assessCommits:
+    handler: handler.lambda_handler
+    description: Assess commits between two refs
+    events:
+      - http:
+          path: assess/commits
+          method: post
+          cors: true
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
+
+resources:
+  Resources:
+    # S3 bucket for catalog storage
+    CatalogBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.catalogBucket}
+        VersioningConfiguration:
+          Status: Enabled
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        LifecycleConfiguration:
+          Rules:
+            - Id: DeleteOldVersions
+              Status: Enabled
+              NoncurrentVersionExpirationInDays: 90
+
+  Outputs:
+    ApiEndpoint:
+      Description: API Gateway endpoint URL
+      Value:
+        Fn::Join:
+          - ''
+          - - 'https://'
+            - Ref: ApiGatewayRestApi
+            - '.execute-api.'
+            - ${self:provider.region}
+            - '.amazonaws.com/'
+            - ${self:provider.stage}
+    
+    CatalogBucketName:
+      Description: S3 bucket for catalog storage
+      Value: ${self:custom.catalogBucket}

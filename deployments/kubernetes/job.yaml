@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: risk-assessor-job
+  namespace: risk-assessor
+  labels:
+    app: risk-assessor
+    component: job
+spec:
+  template:
+    metadata:
+      labels:
+        app: risk-assessor
+        component: job
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: assess
+        image: risk-assessor:latest
+        imagePullPolicy: IfNotPresent
+        
+        # Example: assess a pull request
+        # Customize the command for your use case
+        command:
+        - risk-assessor
+        - assess-pr
+        - --pr
+        - "123"
+        - --output
+        - /output/assessment.json
+        
+        envFrom:
+        - configMapRef:
+            name: risk-assessor-config
+        - secretRef:
+            name: risk-assessor-secrets
+        
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        volumeMounts:
+        - name: catalog-data
+          mountPath: /app/.risk_assessor
+        - name: output
+          mountPath: /output
+        
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: catalog-data
+        persistentVolumeClaim:
+          claimName: risk-assessor-data
+      - name: output
+        emptyDir: {}
+  backoffLimit: 3
