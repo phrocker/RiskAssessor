@@ -51,13 +51,13 @@ jobs:
         echo "Head: ${HEAD_REF}"
         
         # Try to run with contract format first (v2.0)
-        if risk-assessor assess-pr-contract --pr ${PR_NUMBER} --deployment-region "ci-validation" --output risk-contract.json 2>/dev/null; then
+        if python -m risk_assessor.cli assess-pr-contract --pr ${PR_NUMBER} --deployment-region "ci-validation" --output risk-contract.json 2>/dev/null; then
           echo "Generated risk contract"
           echo "risk_format=contract" >> $GITHUB_OUTPUT
         else
           # Fall back to legacy format or commits assessment
           echo "Falling back to commits assessment"
-          risk-assessor assess-commits --base ${BASE_REF} --head ${HEAD_REF} --output risk-assessment.json || true
+          python -m risk_assessor.cli assess-commits --base ${BASE_REF} --head ${HEAD_REF} --output risk-assessment.json || true
           echo "risk_format=legacy" >> $GITHUB_OUTPUT
         fi
         
