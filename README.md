@@ -11,6 +11,7 @@ A Python-based tool for assessing deployment risk by analyzing code changes, his
 - 📈 **Comprehensive Metrics**: Track additions, deletions, file types, and critical files
 - 🎯 **Risk Scoring**: Get actionable risk scores and recommendations
 - 📋 **Risk Contracts**: Structured JSON contracts for standardized risk reporting (v2.0)
+- 🌍 **Regional Validation**: Cloud-agnostic regional feature availability checking (v2.0)
 - 💻 **CLI Interface**: Easy-to-use command-line interface
 - ☁️ **Cloud-Agnostic Deployment**: Deploy to Kubernetes, AWS Lambda, Google Cloud Functions, or Azure Functions
 - 🐳 **Docker Support**: Containerized for consistent environments
@@ -28,6 +29,28 @@ RiskAssessor now supports **Risk Contracts** - a structured JSON format that pro
 - **CI/CD Integration**: Easy to parse and integrate into automated pipelines
 
 See the [examples/README.md](examples/README.md) for detailed documentation and usage examples.
+
+### Regional Validation (NEW in v2.0)
+
+RiskAssessor now includes **cloud-agnostic regional validation** to identify deployment risks based on regional feature availability:
+
+- **Cloud-Agnostic**: Supports AWS, Azure, GCP, and custom/bare-metal infrastructure
+- **Feature Availability**: Automatically checks if required services are available in target regions
+- **Risk Scoring**: Factors missing regional features into overall risk assessment
+- **Flexible Configuration**: Define your own regions and features for any infrastructure
+
+Example configuration:
+
+```yaml
+regional:
+  cloud_provider: aws
+  regions:
+    us-gov-west-1:
+      features: [ec2, s3, rds]  # Limited features in GovCloud
+      region_type: govcloud
+```
+
+See [examples/regional_config_examples.md](examples/regional_config_examples.md) for detailed examples.
 
 #### New Risk Level Thresholds
 
@@ -394,6 +417,14 @@ thresholds:
   history_weight: 0.3
   llm_weight: 0.4
 
+regional:
+  cloud_provider: aws  # aws, azure, gcp, custom, or bare_metal
+  regions:
+    us-east-1:
+      features: [ec2, s3, lambda, rds, dynamodb]
+      region_type: standard
+      availability_zones: 3
+
 catalog_path: .risk_assessor/catalog.json
 ```
 
@@ -407,6 +438,48 @@ thresholds:
   history_weight: 0.4     # Increase history importance
   llm_weight: 0.2         # Decrease LLM importance
 ```
+
+### Regional Configuration
+
+Configure cloud-agnostic regional validation to assess deployment risks based on feature availability:
+
+**AWS Example:**
+```yaml
+regional:
+  cloud_provider: aws
+  regions:
+    us-east-1:
+      features: [ec2, s3, lambda, rds, dynamodb, eks, ecs]
+      region_type: standard
+      availability_zones: 3
+    us-gov-west-1:
+      features: [ec2, s3, rds]  # Limited features in GovCloud
+      region_type: govcloud
+```
+
+**Azure Example:**
+```yaml
+regional:
+  cloud_provider: azure
+  regions:
+    eastus:
+      features: [virtual_machines, app_service, sql_database, storage, functions, aks]
+      paired_region: westus
+```
+
+**Custom/Bare-Metal Example:**
+```yaml
+regional:
+  cloud_provider: custom
+  regions:
+    datacenter-1:
+      features: [kubernetes, postgresql, redis, rabbitmq]
+      metadata:
+        location: on-premises
+        capacity: high
+```
+
+For detailed regional configuration examples, see [examples/regional_config_examples.md](examples/regional_config_examples.md).
 
 ## Python API
 
