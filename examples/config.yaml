@@ -1,0 +1,65 @@
+# Example Configuration File
+
+# This is an example configuration file for RiskAssessor
+# Copy this file and customize it for your needs
+
+# GitHub Configuration
+github:
+  # Your GitHub personal access token
+  # Get one from: https://github.com/settings/tokens
+  token: ${GITHUB_TOKEN}
+  
+  # Repository in format "owner/repo"
+  repo: owner/repository
+
+# Jira Configuration (optional - only if you use Jira)
+jira:
+  # Your Jira server URL
+  server: https://your-company.atlassian.net
+  
+  # Your Jira username/email
+  username: ${JIRA_USERNAME}
+  
+  # Your Jira API token
+  # Get one from: https://id.atlassian.com/manage-profile/security/api-tokens
+  token: ${JIRA_TOKEN}
+  
+  # Default Jira project key
+  project: PROJ
+
+# LLM Configuration
+llm:
+  # OpenAI API key or compatible LLM API key
+  # Get one from: https://platform.openai.com/api-keys
+  api_key: ${OPENAI_API_KEY}
+  
+  # Model to use (e.g., gpt-4, gpt-3.5-turbo)
+  model: gpt-4
+  
+  # Optional: Custom API endpoint for compatible services
+  # api_base: https://api.openai.com/v1
+  
+  # Temperature for LLM generation (0.0-1.0)
+  # Lower = more deterministic, Higher = more creative
+  temperature: 0.7
+
+# Risk Assessment Thresholds
+thresholds:
+  # Score below this is considered low risk
+  low: 0.3
+  
+  # Score below this is considered medium risk
+  medium: 0.6
+  
+  # Score below this is considered high risk
+  high: 0.8
+  
+  # Score above high is considered critical risk
+  
+  # Weights for different risk factors (must sum to ~1.0)
+  complexity_weight: 0.3   # Weight for code complexity analysis
+  history_weight: 0.3      # Weight for historical issue analysis
+  llm_weight: 0.4          # Weight for LLM-based analysis
+
+# Path to store the issue catalog
+catalog_path: .risk_assessor/catalog.json
