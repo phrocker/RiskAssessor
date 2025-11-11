@@ -5,6 +5,7 @@ from datetime import datetime
 import uuid
 
 from risk_assessor.core.issue_catalog import IssueCatalog, CatalogedIssue
+from risk_assessor.core.feedback import FeedbackCatalog, FeedbackEntry
 from risk_assessor.core.contracts import (
     RiskContract, RiskSummary, RiskFactor, 
     HistoricalContext, ModelDetails
@@ -28,6 +29,7 @@ class RiskEngine:
         """
         self.config = config
         self.catalog = IssueCatalog(config.catalog_path)
+        self.feedback = FeedbackCatalog()  # Uses default path
         self.complexity_analyzer = ComplexityAnalyzer()
         
         # Initialize LLM analyzer if configured
@@ -247,8 +249,8 @@ class RiskEngine:
         # Find related historical issues
         related_issues = self.catalog.search_by_files(files_changed)
         
-        # Calculate history-based risk score
-        history_score = self._calculate_history_score(related_issues)
+        # Calculate history-based risk score (now includes feedback)
+        history_score = self._calculate_history_score(related_issues, files_changed)
         
         # LLM analysis if available
         llm_analysis = None
@@ -279,6 +281,9 @@ class RiskEngine:
         else:
             risk_level = "critical"
         
+        # Get feedback for these files
+        related_feedback = self.feedback.search_by_files(files_changed)
+        
         return {
             'title': title,
             'description': description,
@@ -287,6 +292,8 @@ class RiskEngine:
             'history_analysis': {
                 'related_issues_count': len(related_issues),
                 'related_issues': [issue.to_dict() for issue in related_issues[:5]],
+                'related_feedback_count': len(related_feedback),
+                'related_feedback': [fb.to_dict() for fb in related_feedback[:5]],
                 'history_risk_score': history_score
             },
             'llm_analysis': llm_analysis,
@@ -299,39 +306,52 @@ class RiskEngine:
             }
         }
     
-    def _calculate_history_score(self, related_issues: List[CatalogedIssue]) -> float:
+    def _calculate_history_score(
+        self, 
+        related_issues: List[CatalogedIssue],
+        files_changed: List[str]
+    ) -> float:
         """
-        Calculate risk score based on historical issues.
+        Calculate risk score based on historical issues and feedback.
         
         Args:
             related_issues: List of related issues
+            files_changed: List of files being changed
         
         Returns:
             Risk score (0-1)
         """
-        if not related_issues:
-            return 0.0
+        # Calculate traditional issue-based score
+        issue_score = 0.0
+        if related_issues:
+            # Count issues by severity
+            severity_weights = {
+                'critical': 1.0,
+                'high': 0.8,
+                'medium': 0.5,
+                'low': 0.3,
+                None: 0.4
+            }
+            
+            total_weight = 0.0
+            for issue in related_issues:
+                severity = issue.severity.lower() if issue.severity else None
+                weight = severity_weights.get(severity, 0.4)
+                total_weight += weight
+            
+            # Normalize based on number of issues
+            # More related issues = higher risk
+            issue_score = min(1.0, total_weight / 10.0)
         
-        # Count issues by severity
-        severity_weights = {
-            'critical': 1.0,
-            'high': 0.8,
-            'medium': 0.5,
-            'low': 0.3,
-            None: 0.4
-        }
+        # Calculate feedback-based score
+        feedback_score = self.feedback.calculate_feedback_risk_score(files_changed)
         
-        total_weight = 0.0
-        for issue in related_issues:
-            severity = issue.severity.lower() if issue.severity else None
-            weight = severity_weights.get(severity, 0.4)
-            total_weight += weight
+        # Combine scores - feedback is weighted more heavily as it represents
+        # actual incidents that occurred
+        # 40% traditional issues, 60% feedback from actual incidents
+        combined_score = (issue_score * 0.4) + (feedback_score * 0.6)
         
-        # Normalize based on number of issues
-        # More related issues = higher risk
-        score = min(1.0, total_weight / 10.0)
-        
-        return score
+        return combined_score
     
     def _extract_severity_from_labels(self, labels: List[str]) -> Optional[str]:
         """Extract severity from labels."""
@@ -527,8 +547,8 @@ class RiskEngine:
         # Find related historical issues
         related_issues = self.catalog.search_by_files(files_changed)
         
-        # Calculate history-based risk score
-        history_score = self._calculate_history_score(related_issues)
+        # Calculate history-based risk score (now includes feedback)
+        history_score = self._calculate_history_score(related_issues, files_changed)
         
         # LLM analysis if available
         llm_analysis = None
@@ -570,7 +590,8 @@ class RiskEngine:
             complexity_analysis=complexity_analysis,
             history_score=history_score,
             related_issues=related_issues,
-            llm_score=llm_score
+            llm_score=llm_score,
+            files_changed=files_changed
         )
         
         # Generate recommendations
@@ -630,22 +651,23 @@ class RiskEngine:
         complexity_analysis: Dict[str, Any],
         history_score: float,
         related_issues: List[CatalogedIssue],
-        llm_score: float
+        llm_score: float,
+        files_changed: List[str]
     ) -> List[RiskFactor]:
         """Generate risk factors from analysis results."""
         factors = []
         
         # Code complexity factor
         total_changes = complexity_analysis['total_changes']
-        files_changed = complexity_analysis['files_changed']
+        num_files = complexity_analysis['files_changed']
         
         code_weight = self.config.thresholds.complexity_weight * 0.6
         factors.append(RiskFactor(
             category="code",
             factor_name="Change Volume",
             impact_weight=round(code_weight, 2),
-            observed_value=f"{total_changes} lines changed across {files_changed} files",
-            assessment=self._assess_change_volume(total_changes, files_changed)
+            observed_value=f"{total_changes} lines changed across {num_files} files",
+            assessment=self._assess_change_volume(total_changes, num_files)
         ))
         
         # Configuration factor
@@ -660,9 +682,35 @@ class RiskEngine:
                 assessment=f"Modified files include: {', '.join(critical_files[:3])}"
             ))
         
-        # Historical/operational factor
+        # Feedback-based factor (new!)
+        related_feedback = self.feedback.search_by_files(files_changed)
+        if related_feedback:
+            # Weight feedback heavily as it represents actual incidents
+            feedback_weight = self.config.thresholds.history_weight * 0.6
+            
+            # Count by severity
+            critical_count = sum(1 for fb in related_feedback if fb.severity.lower() == 'critical')
+            high_count = sum(1 for fb in related_feedback if fb.severity.lower() == 'high')
+            
+            assessment_parts = []
+            if critical_count > 0:
+                assessment_parts.append(f"{critical_count} critical incident(s)")
+            if high_count > 0:
+                assessment_parts.append(f"{high_count} high-severity incident(s)")
+            
+            assessment = f"Similar changes caused {', '.join(assessment_parts) if assessment_parts else f'{len(related_feedback)} incident(s)'} previously"
+            
+            factors.append(RiskFactor(
+                category="operational",
+                factor_name="Incident History (Feedback)",
+                impact_weight=round(feedback_weight, 2),
+                observed_value=f"{len(related_feedback)} related incidents in feedback",
+                assessment=assessment
+            ))
+        
+        # Historical issues factor
         if related_issues:
-            history_weight = self.config.thresholds.history_weight
+            history_weight = self.config.thresholds.history_weight * 0.4
             factors.append(RiskFactor(
                 category="operational",
                 factor_name="Historical Issues",
@@ -828,3 +876,86 @@ class RiskEngine:
             summary += f"{top_rec.capitalize()} is strongly recommended."
         
         return summary
+    
+    def record_incident_feedback(
+        self,
+        incident_date: str,
+        severity: str,
+        incident_type: str,
+        description: str,
+        root_cause: str,
+        affected_files: List[str],
+        missed_indicators: List[str],
+        resolution: str,
+        lessons_learned: List[str],
+        changeset_id: Optional[str] = None,
+        pr_number: Optional[int] = None,
+        commit_sha: Optional[str] = None,
+        original_risk_score: Optional[float] = None,
+        original_risk_level: Optional[str] = None,
+        time_to_resolve_hours: Optional[float] = None
+    ) -> FeedbackEntry:
+        """
+        Record feedback about an incident that occurred.
+        
+        This allows the system to learn from incidents that were not
+        properly identified during risk assessment.
+        
+        Args:
+            incident_date: When the incident occurred (ISO format)
+            severity: Severity level (critical, high, medium, low)
+            incident_type: Type of incident (outage, performance, security, etc.)
+            description: What happened
+            root_cause: What caused the incident
+            affected_files: Files involved in the incident
+            missed_indicators: What should have been caught
+            resolution: How it was fixed
+            lessons_learned: What to watch for next time
+            changeset_id: ID of the assessment that missed this (optional)
+            pr_number: PR number if applicable (optional)
+            commit_sha: Commit SHA if applicable (optional)
+            original_risk_score: What was the score given (optional)
+            original_risk_level: What was the level given (optional)
+            time_to_resolve_hours: How long to fix (optional)
+        
+        Returns:
+            The created FeedbackEntry
+        """
+        # Generate unique ID
+        feedback_id = f"feedback-{uuid.uuid4().hex[:12]}"
+        
+        # Create feedback entry
+        entry = FeedbackEntry(
+            id=feedback_id,
+            timestamp=datetime.now().isoformat(),
+            incident_date=incident_date,
+            changeset_id=changeset_id,
+            pr_number=pr_number,
+            commit_sha=commit_sha,
+            severity=severity,
+            incident_type=incident_type,
+            description=description,
+            root_cause=root_cause,
+            affected_files=affected_files,
+            missed_indicators=missed_indicators,
+            original_risk_score=original_risk_score,
+            original_risk_level=original_risk_level,
+            resolution=resolution,
+            time_to_resolve_hours=time_to_resolve_hours,
+            lessons_learned=lessons_learned
+        )
+        
+        # Add to catalog and save
+        self.feedback.add_feedback(entry)
+        self.feedback.save()
+        
+        return entry
+    
+    def get_feedback_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about recorded incident feedback.
+        
+        Returns:
+            Dictionary of statistics
+        """
+        return self.feedback.get_statistics()
