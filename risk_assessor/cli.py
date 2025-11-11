@@ -83,6 +83,78 @@ def print_risk_assessment(assessment: dict):
                 console.print(f"    • {rec}")
 
 
+def print_risk_contract(contract):
+    """Print risk contract in a formatted way."""
+    from risk_assessor.core.contracts import RiskContract
+    
+    # Convert to dict if it's a RiskContract object
+    if isinstance(contract, RiskContract):
+        contract_dict = contract.to_dict()
+    else:
+        contract_dict = contract
+    
+    # Overall risk summary
+    summary = contract_dict['risk_summary']
+    risk_level = summary['risk_level']
+    risk_score = summary['risk_score']
+    
+    # Color based on risk level
+    color_map = {
+        'LOW': 'green',
+        'MEDIUM': 'yellow',
+        'HIGH': 'red'
+    }
+    color = color_map.get(risk_level, 'white')
+    
+    console.print(Panel(
+        f"[bold {color}]{risk_level} RISK[/bold {color}]\n"
+        f"Risk Score: {risk_score:.2f}\n"
+        f"Confidence: {summary['confidence']:.2f}",
+        title=f"Risk Assessment - {contract_dict['id']}",
+        border_style=color
+    ))
+    
+    # Print overall assessment
+    console.print(f"\n[bold]Assessment:[/bold] {summary['overall_assessment']}")
+    
+    # Print text summary
+    if contract_dict.get('text_summary'):
+        console.print(f"\n{contract_dict['text_summary']}")
+    
+    # Risk Factors
+    if contract_dict.get('factors'):
+        console.print("\n[bold]Risk Factors:[/bold]")
+        for factor in contract_dict['factors']:
+            console.print(f"\n  [bold cyan]{factor['factor_name']}[/bold cyan] ({factor['category']})")
+            console.print(f"  Weight: {factor['impact_weight']:.2f}")
+            console.print(f"  Observed: {factor['observed_value']}")
+            console.print(f"  Assessment: {factor['assessment']}")
+    
+    # Recommendations
+    if contract_dict.get('recommendations'):
+        console.print("\n[bold green]Recommendations:[/bold green]")
+        for i, rec in enumerate(contract_dict['recommendations'], 1):
+            console.print(f"  {i}. {rec}")
+    
+    # Historical Context
+    if contract_dict.get('historical_context'):
+        hc = contract_dict['historical_context']
+        console.print("\n[bold]Historical Context:[/bold]")
+        console.print(f"  Previous Similar Changes: {hc['previous_similar_changes']}")
+        console.print(f"  Previous Incidents in Region: {hc['previous_incidents_in_region']}")
+        if hc.get('last_incident_cause'):
+            console.print(f"  Last Incident: {hc['last_incident_cause']}")
+        if hc.get('time_since_last_outage_days') is not None:
+            console.print(f"  Days Since Last Outage: {hc['time_since_last_outage_days']}")
+    
+    # Deployment info
+    console.print("\n[bold]Deployment Info:[/bold]")
+    console.print(f"  Repository: {contract_dict['repository']}")
+    console.print(f"  Branch: {contract_dict['branch']}")
+    console.print(f"  Region: {contract_dict['deployment_region']}")
+    console.print(f"  Timestamp: {contract_dict['timestamp']}")
+
+
 @click.group()
 @click.version_option(version="0.1.0")
 def cli():
@@ -228,6 +300,88 @@ def catalog_stats(config):
         console.print("\n  [bold]By Status:[/bold]")
         for status, count in stats['by_status'].items():
             console.print(f"    {status}: {count}")
+
+
+@cli.command()
+@click.option('--config', '-c', type=click.Path(), help='Path to config file')
+@click.option('--pr', type=int, required=True, help='Pull request number')
+@click.option('--output', '-o', type=click.Path(), help='Output JSON file')
+@click.option('--deployment-region', '-r', default='unknown', help='Target deployment region')
+@click.option('--branch', '-b', help='Target branch (optional, uses PR branch if not specified)')
+def assess_pr_contract(config, pr, output, deployment_region, branch):
+    """Assess risk for a GitHub pull request and output as a contract."""
+    # Load config
+    if config:
+        cfg = Config.from_file(config)
+    else:
+        cfg = Config.from_env()
+    
+    # Initialize engine
+    engine = RiskEngine(cfg)
+    
+    try:
+        console.print(f"[bold blue]Assessing PR #{pr} with contract format...[/bold blue]")
+        contract = engine.assess_pull_request_contract(
+            pr_number=pr,
+            deployment_region=deployment_region,
+            branch=branch
+        )
+        
+        # Print contract
+        print_risk_contract(contract)
+        
+        # Save to file if requested
+        if output:
+            with open(output, 'w') as f:
+                json.dump(contract.to_dict(), f, indent=2)
+            console.print(f"\n[green]✓ Risk contract saved to {output}[/green]")
+    
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@cli.command()
+@click.option('--config', '-c', type=click.Path(), help='Path to config file')
+@click.option('--base', required=True, help='Base reference (branch/tag/SHA)')
+@click.option('--head', required=True, help='Head reference (branch/tag/SHA)')
+@click.option('--output', '-o', type=click.Path(), help='Output JSON file')
+@click.option('--deployment-region', '-r', default='unknown', help='Target deployment region')
+def assess_commits_contract(config, base, head, output, deployment_region):
+    """Assess risk for commits between two references and output as a contract."""
+    # Load config
+    if config:
+        cfg = Config.from_file(config)
+    else:
+        cfg = Config.from_env()
+    
+    # Initialize engine
+    engine = RiskEngine(cfg)
+    
+    try:
+        console.print(f"[bold blue]Assessing changes from {base} to {head} with contract format...[/bold blue]")
+        contract = engine.assess_commits_contract(
+            base_ref=base,
+            head_ref=head,
+            deployment_region=deployment_region
+        )
+        
+        # Print contract
+        print_risk_contract(contract)
+        
+        # Save to file if requested
+        if output:
+            with open(output, 'w') as f:
+                json.dump(contract.to_dict(), f, indent=2)
+            console.print(f"\n[green]✓ Risk contract saved to {output}[/green]")
+    
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
